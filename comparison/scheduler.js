@@ -1,209 +1,241 @@
 import { curry2, curry3, findIndex, removeAll } from '@most/prelude';
 
-/** @license MIT License (c) copyright 2010-2017 original author or authors */
-
-var ScheduledTask = function ScheduledTask (time, localOffset, period, task, scheduler) {
-  this.time = time;
-  this.localOffset = localOffset;
-  this.period = period;
-  this.task = task;
-  this.scheduler = scheduler;
-  this.active = true;
-};
-
-ScheduledTask.prototype.run = function run () {
-  return this.task.run(this.time - this.localOffset)
-};
-
-ScheduledTask.prototype.error = function error (e) {
-  return this.task.error(this.time - this.localOffset, e)
-};
-
-ScheduledTask.prototype.dispose = function dispose () {
-  this.scheduler.cancel(this);
-  return this.task.dispose()
-};
-
-var RelativeScheduler = function RelativeScheduler (origin, scheduler) {
-  this.origin = origin;
-  this.scheduler = scheduler;
-};
-
-RelativeScheduler.prototype.currentTime = function currentTime () {
-  return this.scheduler.currentTime() - this.origin
-};
-
-RelativeScheduler.prototype.scheduleTask = function scheduleTask (localOffset, delay, period, task) {
-  return this.scheduler.scheduleTask(localOffset + this.origin, delay, period, task)
-};
-
-RelativeScheduler.prototype.relative = function relative (origin) {
-  return new RelativeScheduler(origin + this.origin, this.scheduler)
-};
-
-RelativeScheduler.prototype.cancel = function cancel (task) {
-  return this.scheduler.cancel(task)
-};
-
-RelativeScheduler.prototype.cancelAll = function cancelAll (f) {
-  return this.scheduler.cancelAll(f)
+var classCallCheck = function (instance, Constructor) {
+  if (!(instance instanceof Constructor)) {
+    throw new TypeError("Cannot call a class as a function");
+  }
 };
 
 /** @license MIT License (c) copyright 2010-2017 original author or authors */
 
-var defer = function (task) { return Promise.resolve(task).then(runTask); };
+var ScheduledTask = /*#__PURE__*/function () {
+  function ScheduledTask(time, localOffset, period, task, scheduler) {
+    classCallCheck(this, ScheduledTask);
 
-function runTask (task) {
+    this.time = time;
+    this.localOffset = localOffset;
+    this.period = period;
+    this.task = task;
+    this.scheduler = scheduler;
+    this.active = true;
+  }
+
+  ScheduledTask.prototype.run = function run() {
+    return this.task.run(this.time - this.localOffset);
+  };
+
+  ScheduledTask.prototype.error = function error(e) {
+    return this.task.error(this.time - this.localOffset, e);
+  };
+
+  ScheduledTask.prototype.dispose = function dispose() {
+    this.scheduler.cancel(this);
+    return this.task.dispose();
+  };
+
+  return ScheduledTask;
+}();
+
+var RelativeScheduler = /*#__PURE__*/function () {
+  function RelativeScheduler(origin, scheduler) {
+    classCallCheck(this, RelativeScheduler);
+
+    this.origin = origin;
+    this.scheduler = scheduler;
+  }
+
+  RelativeScheduler.prototype.currentTime = function currentTime() {
+    return this.scheduler.currentTime() - this.origin;
+  };
+
+  RelativeScheduler.prototype.scheduleTask = function scheduleTask(localOffset, delay, period, task) {
+    return this.scheduler.scheduleTask(localOffset + this.origin, delay, period, task);
+  };
+
+  RelativeScheduler.prototype.relative = function relative(origin) {
+    return new RelativeScheduler(origin + this.origin, this.scheduler);
+  };
+
+  RelativeScheduler.prototype.cancel = function cancel(task) {
+    return this.scheduler.cancel(task);
+  };
+
+  RelativeScheduler.prototype.cancelAll = function cancelAll(f) {
+    return this.scheduler.cancelAll(f);
+  };
+
+  return RelativeScheduler;
+}();
+
+/** @license MIT License (c) copyright 2010-2017 original author or authors */
+
+var defer = function defer(task) {
+  return Promise.resolve(task).then(runTask);
+};
+
+function runTask(task) {
   try {
-    return task.run()
+    return task.run();
   } catch (e) {
-    return task.error(e)
+    return task.error(e);
   }
 }
 
 /** @license MIT License (c) copyright 2010-2017 original author or authors */
 
-var Scheduler = function Scheduler (timer, timeline) {
-  var this$1 = this;
+var Scheduler = /*#__PURE__*/function () {
+  function Scheduler(timer, timeline) {
+    var _this = this;
 
-  this.timer = timer;
-  this.timeline = timeline;
+    classCallCheck(this, Scheduler);
 
-  this._timer = null;
-  this._nextArrival = Infinity;
+    this.timer = timer;
+    this.timeline = timeline;
 
-  this._runReadyTasksBound = function () { return this$1._runReadyTasks(this$1.currentTime()); };
-};
+    this._timer = null;
+    this._nextArrival = Infinity;
 
-Scheduler.prototype.currentTime = function currentTime () {
-  return this.timer.now()
-};
+    this._runReadyTasksBound = function () {
+      return _this._runReadyTasks(_this.currentTime());
+    };
+  }
 
-Scheduler.prototype.scheduleTask = function scheduleTask (localOffset, delay, period, task) {
-  var time = this.currentTime() + Math.max(0, delay);
-  var st = new ScheduledTask(time, localOffset, period, task, this);
+  Scheduler.prototype.currentTime = function currentTime() {
+    return this.timer.now();
+  };
 
-  this.timeline.add(st);
-  this._scheduleNextRun();
-  return st
-};
+  Scheduler.prototype.scheduleTask = function scheduleTask(localOffset, delay, period, task) {
+    var time = this.currentTime() + Math.max(0, delay);
+    var st = new ScheduledTask(time, localOffset, period, task, this);
 
-Scheduler.prototype.relative = function relative (offset) {
-  return new RelativeScheduler(offset, this)
-};
+    this.timeline.add(st);
+    this._scheduleNextRun();
+    return st;
+  };
 
-Scheduler.prototype.cancel = function cancel (task) {
-  task.active = false;
-  if (this.timeline.remove(task)) {
+  Scheduler.prototype.relative = function relative(offset) {
+    return new RelativeScheduler(offset, this);
+  };
+
+  Scheduler.prototype.cancel = function cancel(task) {
+    task.active = false;
+    if (this.timeline.remove(task)) {
+      this._reschedule();
+    }
+  };
+
+  Scheduler.prototype.cancelAll = function cancelAll(f) {
+    this.timeline.removeAll(f);
     this._reschedule();
-  }
-};
+  };
 
-Scheduler.prototype.cancelAll = function cancelAll (f) {
-  this.timeline.removeAll(f);
-  this._reschedule();
-};
+  Scheduler.prototype._reschedule = function _reschedule() {
+    if (this.timeline.isEmpty()) {
+      this._unschedule();
+    } else {
+      this._scheduleNextRun(this.currentTime());
+    }
+  };
 
-Scheduler.prototype._reschedule = function _reschedule () {
-  if (this.timeline.isEmpty()) {
-    this._unschedule();
-  } else {
-    this._scheduleNextRun(this.currentTime());
-  }
-};
+  Scheduler.prototype._unschedule = function _unschedule() {
+    this.timer.clearTimer(this._timer);
+    this._timer = null;
+  };
 
-Scheduler.prototype._unschedule = function _unschedule () {
-  this.timer.clearTimer(this._timer);
-  this._timer = null;
-};
+  Scheduler.prototype._scheduleNextRun = function _scheduleNextRun() {
+    // eslint-disable-line complexity
+    if (this.timeline.isEmpty()) {
+      return;
+    }
 
-Scheduler.prototype._scheduleNextRun = function _scheduleNextRun () { // eslint-disable-line complexity
-  if (this.timeline.isEmpty()) {
-    return
-  }
+    var nextArrival = this.timeline.nextArrival();
 
-  var nextArrival = this.timeline.nextArrival();
+    if (this._timer === null) {
+      this._scheduleNextArrival(nextArrival);
+    } else if (nextArrival < this._nextArrival) {
+      this._unschedule();
+      this._scheduleNextArrival(nextArrival);
+    }
+  };
 
-  if (this._timer === null) {
-    this._scheduleNextArrival(nextArrival);
-  } else if (nextArrival < this._nextArrival) {
-    this._unschedule();
-    this._scheduleNextArrival(nextArrival);
-  }
-};
+  Scheduler.prototype._scheduleNextArrival = function _scheduleNextArrival(nextArrival) {
+    this._nextArrival = nextArrival;
+    var delay = Math.max(0, nextArrival - this.currentTime());
+    this._timer = this.timer.setTimer(this._runReadyTasksBound, delay);
+  };
 
-Scheduler.prototype._scheduleNextArrival = function _scheduleNextArrival (nextArrival) {
-  this._nextArrival = nextArrival;
-  var delay = Math.max(0, nextArrival - this.currentTime());
-  this._timer = this.timer.setTimer(this._runReadyTasksBound, delay);
-};
+  Scheduler.prototype._runReadyTasks = function _runReadyTasks() {
+    this._timer = null;
+    this.timeline.runTasks(this.currentTime(), runTask);
+    this._scheduleNextRun();
+  };
 
-Scheduler.prototype._runReadyTasks = function _runReadyTasks () {
-  this._timer = null;
-  this.timeline.runTasks(this.currentTime(), runTask);
-  this._scheduleNextRun();
-};
+  return Scheduler;
+}();
 
 /** @license MIT License (c) copyright 2010-2017 original author or authors */
 
-var Timeline = function Timeline () {
-  this.tasks = [];
-};
+var Timeline = /*#__PURE__*/function () {
+  function Timeline() {
+    classCallCheck(this, Timeline);
 
-Timeline.prototype.nextArrival = function nextArrival () {
-  return this.isEmpty() ? Infinity : this.tasks[0].time
-};
+    this.tasks = [];
+  }
 
-Timeline.prototype.isEmpty = function isEmpty () {
-  return this.tasks.length === 0
-};
+  Timeline.prototype.nextArrival = function nextArrival() {
+    return this.isEmpty() ? Infinity : this.tasks[0].time;
+  };
 
-Timeline.prototype.add = function add (st) {
-  insertByTime(st, this.tasks);
-};
+  Timeline.prototype.isEmpty = function isEmpty() {
+    return this.tasks.length === 0;
+  };
 
-Timeline.prototype.remove = function remove (st) {
-  var i = binarySearch(getTime(st), this.tasks);
+  Timeline.prototype.add = function add(st) {
+    insertByTime(st, this.tasks);
+  };
 
-  if (i >= 0 && i < this.tasks.length) {
-    var at = findIndex(st, this.tasks[i].events);
-    if (at >= 0) {
-      this.tasks[i].events.splice(at, 1);
-      return true
+  Timeline.prototype.remove = function remove(st) {
+    var i = binarySearch(getTime(st), this.tasks);
+
+    if (i >= 0 && i < this.tasks.length) {
+      var at = findIndex(st, this.tasks[i].events);
+      if (at >= 0) {
+        this.tasks[i].events.splice(at, 1);
+        return true;
+      }
     }
-  }
 
-  return false
-};
+    return false;
+  };
 
-Timeline.prototype.removeAll = function removeAll$$1 (f) {
-    var this$1 = this;
+  Timeline.prototype.removeAll = function removeAll$$1(f) {
+    for (var i = 0; i < this.tasks.length; ++i) {
+      removeAllFrom(f, this.tasks[i]);
+    }
+  };
 
-  for (var i = 0; i < this.tasks.length; ++i) {
-    removeAllFrom(f, this$1.tasks[i]);
-  }
-};
+  Timeline.prototype.runTasks = function runTasks(t, runTask) {
+    var tasks = this.tasks;
+    var l = tasks.length;
+    var i = 0;
 
-Timeline.prototype.runTasks = function runTasks (t, runTask) {
-    var this$1 = this;
+    while (i < l && tasks[i].time <= t) {
+      ++i;
+    }
 
-  var tasks = this.tasks;
-  var l = tasks.length;
-  var i = 0;
+    this.tasks = tasks.slice(i);
 
-  while (i < l && tasks[i].time <= t) {
-    ++i;
-  }
+    // Run all ready tasks
+    for (var j = 0; j < i; ++j) {
+      this.tasks = runReadyTasks(runTask, tasks[j].events, this.tasks);
+    }
+  };
 
-  this.tasks = tasks.slice(i);
+  return Timeline;
+}();
 
-  // Run all ready tasks
-  for (var j = 0; j < i; ++j) {
-    this$1.tasks = runReadyTasks(runTask, tasks[j].events, this$1.tasks);
-  }
-};
-
-function runReadyTasks (runTask, events, tasks) { // eslint-disable-line complexity
+function runReadyTasks(runTask, events, tasks) {
+  // eslint-disable-line complexity
   for (var i = 0; i < events.length; ++i) {
     var task = events[i];
 
@@ -219,16 +251,16 @@ function runReadyTasks (runTask, events, tasks) { // eslint-disable-line complex
     }
   }
 
-  return tasks
+  return tasks;
 }
 
-function insertByTime (task, timeslots) {
+function insertByTime(task, timeslots) {
   var l = timeslots.length;
   var time = getTime(task);
 
   if (l === 0) {
     timeslots.push(newTimeslot(time, [task]));
-    return
+    return;
   }
 
   var i = binarySearch(time, timeslots);
@@ -240,7 +272,7 @@ function insertByTime (task, timeslots) {
   }
 }
 
-function insertAtTimeslot (task, timeslots, time, i) {
+function insertAtTimeslot(task, timeslots, time, i) {
   var timeslot = timeslots[i];
   if (time === timeslot.time) {
     addEvent(task, timeslot.events, time);
@@ -249,7 +281,7 @@ function insertAtTimeslot (task, timeslots, time, i) {
   }
 }
 
-function addEvent (task, events) {
+function addEvent(task, events) {
   if (events.length === 0 || task.time >= events[events.length - 1].time) {
     events.push(task);
   } else {
@@ -257,162 +289,222 @@ function addEvent (task, events) {
   }
 }
 
-function spliceEvent (task, events) {
+function spliceEvent(task, events) {
   for (var j = 0; j < events.length; j++) {
     if (task.time < events[j].time) {
       events.splice(j, 0, task);
-      break
+      break;
     }
   }
 }
 
-function getTime (scheduledTask) {
-  return Math.floor(scheduledTask.time)
+function getTime(scheduledTask) {
+  return Math.floor(scheduledTask.time);
 }
 
-function removeAllFrom (f, timeslot) {
+function removeAllFrom(f, timeslot) {
   timeslot.events = removeAll(f, timeslot.events);
 }
 
-function binarySearch (t, sortedArray) { // eslint-disable-line complexity
+function binarySearch(t, sortedArray) {
+  // eslint-disable-line complexity
   var lo = 0;
   var hi = sortedArray.length;
-  var mid, y;
+  var mid = void 0,
+      y = void 0;
 
   while (lo < hi) {
     mid = Math.floor((lo + hi) / 2);
     y = sortedArray[mid];
 
     if (t === y.time) {
-      return mid
+      return mid;
     } else if (t < y.time) {
       hi = mid;
     } else {
       lo = mid + 1;
     }
   }
-  return hi
+  return hi;
 }
 
-var newTimeslot = function (t, events) { return ({ time: t, events: events }); };
+var newTimeslot = function newTimeslot(t, events) {
+  return { time: t, events: events };
+};
 
 /** @license MIT License (c) copyright 2010-2017 original author or authors */
 
 /* global setTimeout, clearTimeout */
 
-var ClockTimer = function ClockTimer (clock) {
-  this._clock = clock;
-};
+var ClockTimer = /*#__PURE__*/function () {
+  function ClockTimer(clock) {
+    classCallCheck(this, ClockTimer);
 
-ClockTimer.prototype.now = function now () {
-  return this._clock.now()
-};
+    this._clock = clock;
+  }
 
-ClockTimer.prototype.setTimer = function setTimer (f, dt) {
-  return dt <= 0 ? runAsap(f) : setTimeout(f, dt)
-};
+  ClockTimer.prototype.now = function now() {
+    return this._clock.now();
+  };
 
-ClockTimer.prototype.clearTimer = function clearTimer (t) {
-  return t instanceof Asap ? t.cancel() : clearTimeout(t)
-};
+  ClockTimer.prototype.setTimer = function setTimer(f, dt) {
+    return dt <= 0 ? runAsap(f) : setTimeout(f, dt);
+  };
 
-var Asap = function Asap (f) {
-  this.f = f;
-  this.active = true;
-};
+  ClockTimer.prototype.clearTimer = function clearTimer(t) {
+    return t instanceof Asap ? t.cancel() : clearTimeout(t);
+  };
 
-Asap.prototype.run = function run () {
-  return this.active && this.f()
-};
+  return ClockTimer;
+}();
 
-Asap.prototype.error = function error (e) {
-  throw e
-};
+var Asap = /*#__PURE__*/function () {
+  function Asap(f) {
+    classCallCheck(this, Asap);
 
-Asap.prototype.cancel = function cancel () {
-  this.active = false;
-};
+    this.f = f;
+    this.active = true;
+  }
 
-function runAsap (f) {
+  Asap.prototype.run = function run() {
+    return this.active && this.f();
+  };
+
+  Asap.prototype.error = function error(e) {
+    throw e;
+  };
+
+  Asap.prototype.cancel = function cancel() {
+    this.active = false;
+  };
+
+  return Asap;
+}();
+
+function runAsap(f) {
   var task = new Asap(f);
   defer(task);
-  return task
+  return task;
 }
 
 /** @license MIT License (c) copyright 2010-2017 original author or authors */
 
 /* global performance, process */
 
-var RelativeClock = function RelativeClock (clock, origin) {
-  this.origin = origin;
-  this.clock = clock;
-};
+var RelativeClock = /*#__PURE__*/function () {
+  function RelativeClock(clock, origin) {
+    classCallCheck(this, RelativeClock);
 
-RelativeClock.prototype.now = function now () {
-  return this.clock.now() - this.origin
-};
-
-var HRTimeClock = function HRTimeClock (hrtime, origin) {
-  this.origin = origin;
-  this.hrtime = hrtime;
-};
-
-HRTimeClock.prototype.now = function now () {
-  var hrt = this.hrtime(this.origin);
-  return (hrt[0] * 1e9 + hrt[1]) / 1e6
-};
-
-var clockRelativeTo = function (clock) { return new RelativeClock(clock, clock.now()); };
-
-var newPerformanceClock = function () { return clockRelativeTo(performance); };
-
-var newDateClock = function () { return clockRelativeTo(Date); };
-
-var newHRTimeClock = function () { return new HRTimeClock(process.hrtime, process.hrtime()); };
-
-var newPlatformClock = function () {
-  if (typeof performance !== 'undefined' && typeof performance.now === 'function') {
-    return newPerformanceClock()
-  } else if (typeof process !== 'undefined' && typeof process.hrtime === 'function') {
-    return newHRTimeClock()
+    this.origin = origin;
+    this.clock = clock;
   }
 
-  return newDateClock()
+  RelativeClock.prototype.now = function now() {
+    return this.clock.now() - this.origin;
+  };
+
+  return RelativeClock;
+}();
+
+var HRTimeClock = /*#__PURE__*/function () {
+  function HRTimeClock(hrtime, origin) {
+    classCallCheck(this, HRTimeClock);
+
+    this.origin = origin;
+    this.hrtime = hrtime;
+  }
+
+  HRTimeClock.prototype.now = function now() {
+    var hrt = this.hrtime(this.origin);
+    return (hrt[0] * 1e9 + hrt[1]) / 1e6;
+  };
+
+  return HRTimeClock;
+}();
+
+var clockRelativeTo = function clockRelativeTo(clock) {
+  return new RelativeClock(clock, clock.now());
+};
+
+var newPerformanceClock = function newPerformanceClock() {
+  return clockRelativeTo(performance);
+};
+
+var newDateClock = function newDateClock() {
+  return clockRelativeTo(Date);
+};
+
+var newHRTimeClock = function newHRTimeClock() {
+  return new HRTimeClock(process.hrtime, process.hrtime());
+};
+
+var newPlatformClock = function newPlatformClock() {
+  if (typeof performance !== 'undefined' && typeof performance.now === 'function') {
+    return newPerformanceClock();
+  } else if (typeof process !== 'undefined' && typeof process.hrtime === 'function') {
+    return newHRTimeClock();
+  }
+
+  return newDateClock();
 };
 
 // Read the current time from the provided Scheduler
-var currentTime = function (scheduler) { return scheduler.currentTime(); };
+var currentTime = function currentTime(scheduler) {
+  return scheduler.currentTime();
+};
 
 // Schedule a task to run as soon as possible, but
 // not in the current call stack
-var asap = curry2(function (task, scheduler) { return scheduler.scheduleTask(0, 0, -1, task); });
+var asap = /*#__PURE__*/curry2(function (task, scheduler) {
+  return scheduler.scheduleTask(0, 0, -1, task);
+});
 
 // Schedule a task to run after a millisecond delay
-var delay = curry3(function (delay, task, scheduler) { return scheduler.scheduleTask(0, delay, -1, task); });
+var delay = /*#__PURE__*/curry3(function (delay, task, scheduler) {
+  return scheduler.scheduleTask(0, delay, -1, task);
+});
 
 // Schedule a task to run periodically, with the
 // first run starting asap
-var periodic = curry3(function (period, task, scheduler) { return scheduler.scheduleTask(0, 0, period, task); });
+var periodic = /*#__PURE__*/curry3(function (period, task, scheduler) {
+  return scheduler.scheduleTask(0, 0, period, task);
+});
 
 // Cancel a scheduledTask
-var cancelTask = function (scheduledTask) { return scheduledTask.dispose(); };
+var cancelTask = function cancelTask(scheduledTask) {
+  return scheduledTask.dispose();
+};
 
 // Cancel all ScheduledTasks for which a predicate
 // is true
-var cancelAllTasks = curry2(function (predicate, scheduler) { return scheduler.cancelAll(predicate); });
+var cancelAllTasks = /*#__PURE__*/curry2(function (predicate, scheduler) {
+  return scheduler.cancelAll(predicate);
+});
 
-var schedulerRelativeTo = curry2(function (offset, scheduler) { return new RelativeScheduler(offset, scheduler); });
+var schedulerRelativeTo = /*#__PURE__*/curry2(function (offset, scheduler) {
+  return new RelativeScheduler(offset, scheduler);
+});
 
 /** @license MIT License (c) copyright 2010-2017 original author or authors */
 
-var newScheduler = curry2(function (timer, timeline) { return new Scheduler(timer, timeline); });
+var newScheduler = /*#__PURE__*/curry2(function (timer, timeline) {
+  return new Scheduler(timer, timeline);
+});
 
-var newDefaultScheduler = function () { return new Scheduler(newDefaultTimer(), new Timeline()); };
+var newDefaultScheduler = function newDefaultScheduler() {
+  return new Scheduler(newDefaultTimer(), new Timeline());
+};
 
-var newDefaultTimer = function () { return new ClockTimer(newPlatformClock()); };
-var newClockTimer = function (clock) { return new ClockTimer(clock); };
+var newDefaultTimer = function newDefaultTimer() {
+  return new ClockTimer(newPlatformClock());
+};
+var newClockTimer = function newClockTimer(clock) {
+  return new ClockTimer(clock);
+};
 
-var newTimeline = function () { return new Timeline(); };
+var newTimeline = function newTimeline() {
+  return new Timeline();
+};
 
 export { newScheduler, newDefaultScheduler, newDefaultTimer, newClockTimer, newTimeline, RelativeClock, HRTimeClock, clockRelativeTo, newPerformanceClock, newDateClock, newHRTimeClock, newPlatformClock, currentTime, asap, delay, periodic, cancelTask, cancelAllTasks, schedulerRelativeTo };
 //# sourceMappingURL=index.es.js.map
